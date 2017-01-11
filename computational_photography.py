@@ -61,6 +61,29 @@ def create_mask(img):
     imgHelper.show_image('mask', thresh);
     return thresh;
 
+
+def obj_detect(src):
+    face_cascade = cv2.CascadeClassifier('C:\opencv\sources\data\haarcascades\haarcascade_frontalface_default.xml')
+    print face_cascade
+    eye_cascade = cv2.CascadeClassifier('C:\opencv\sources\data\haarcascades\haarcascade_eye.xml')
+    print eye_cascade
+
+    gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+
+    faces = face_cascade.detectMultiScale(gray, 1.3, 5);
+
+    for (x, y, w, h) in faces:
+        img = cv2.rectangle(src, (x, y), (x+w, y+h), (255, 0, 0), 2);
+        roi_gray = gray[y:y+h, x:x+w];
+        roi_color = img[y:y+h, x:x+w];
+        eyes = eye_cascade.detectMultiScale(roi_gray);
+
+        for (ex, ey, ew, eh) in eyes:
+            cv2.rectangle(roi_color, (ex, ey), (ex+ew, ey+eh), (0, 255, 0), 2)
+
+    imgHelper.show_image('detected', img);
+
+
 def main():
     img = cv2.imread('lena.png');
     imgHelper.show_image('origin', img);
@@ -68,8 +91,12 @@ def main():
     img2 = cv2.imread('lena_damaged.bmp');
     imgHelper.show_image('impaint origin', img2);
 
+    img3 = cv2.imread('faces.jpg');
+    imgHelper.show_image('faces origin', img3);
+
     # denoise(img);
-    inpaint(img2);
+    # inpaint(img2);
+    obj_detect(img3);
 
 
 main();
