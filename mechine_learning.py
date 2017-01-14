@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import show_image as imgHelper;
 
-
+# ORC: optical character recognition
 def knn_test():
     # feature set containing (x,y) values of 25 known/training data
     # randint(min, max, size)
@@ -95,9 +95,35 @@ def ocr_knn_test():
     print accuracy
 
 
+def orc_knn_alphabet():
+    # load the data, converters convert the letter to a number
+    data = np.loadtxt('C:\opencv\sources\samples\data\letter-recognition.data',
+                      dtype = 'float32', delimiter=',',
+                      converters= {0: lambda  ch: ord(ch)-ord('A')})
+    print "data size: ", data.shape # (20000, 17)
+
+    # split the data to two, 10000 each for train and test
+    train, test = np.vsplit(data, 2);
+
+    # split trainData and testData to feature and responses
+    responses, trainData = np.hsplit(train, [1]);
+    labels, testData = np.hsplit(test, [1]);
+
+    # initiate the knn, classify, measure accuracy
+    knn = cv2.ml.KNearest_create();
+    knn.train(trainData, cv2.ml.ROW_SAMPLE, responses);
+    ret, result, neighbors, dist = knn.findNearest(testData, k=5);
+
+    correct = np.count_nonzero(result == labels);
+    accuracy = correct * 100.0 / 10000
+
+    print accuracy
+
+
 def main():
     # knn_test();
-    ocr_knn_test();
+    # ocr_knn_test();
+    orc_knn_alphabet();
 
 
 main();
