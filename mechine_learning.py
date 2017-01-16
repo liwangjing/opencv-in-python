@@ -3,6 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import show_image as imgHelper;
 
+
+SZ = 20
+bin_n = 16  # Number of bins
+svm_params = dict( kernel_type = cv2.ml.SVM_LINEAR,
+                   svm_type = cv2.ml.SVM_C_SVC,
+                   C = 2.67, gamma = 5.383 );
+affine_flags = cv2.WARP_INVERSE_MAP|cv2.INTER_LINEAR;
+
+
 # ORC: optical character recognition
 def knn_test():
     # feature set containing (x,y) values of 25 known/training data
@@ -120,10 +129,86 @@ def orc_knn_alphabet():
     print accuracy
 
 
+def deskew(img):
+    # take a digit image, deskew it using its second order moments.
+    # 将一个倾斜的image摆正
+    imgHelper.show_image('before skewed', img);
+    m = cv2.moments(img);
+    if abs(m['mu02']) < 1e-2:
+        return img.copy();
+    skew = m['mu11'] / m['mu02'];
+    M = np.float32([[1, skew, -0.5 * SZ * skew], [0, 1, 0]]);
+    img = cv2.warpAffine(img, M, (SZ, SZ), flags = affine_flags);
+
+    imgHelper.show_image('deskewed image', img)
+    return img;
+
+
+def hog(img):
+    # HOG: histogram of oriented gradient
+# find the HOG Descriptor of each cell.
+# For that, we find Sobel derivatives of each cell in X and Y direction.
+# Then find their magnitude and direction of gradient at each pixel.
+# This gradient is quantized to 16 integer values. Divide this image to four sub-squares.
+# For each sub-square, calculate the histogram of direction (16 bins) weighted with their magnitude.
+# So each sub-square gives you a vector containing 16 values.
+# Four such vectors (of four sub-squares) together gives us a feature vector containing 64 values.
+# This is the feature vector we use to train our data.
+    gx = cv2.Sobel(img, cv2.CV_32F, 1, 0); # highpass filter
+    gy = cv2.Sobel(img, cv2.CV_32F, 0, 1);
+    mag, ang = cv2.cartToPolar(gx, gy);
+
+    # quantizing binvalues in (0, 1, ... 16)
+    bins = np.int32(bin_n * ang / (2 * np.pi));
+
+    # divide to 4 sub-squares
+    bin_cells = bins[:10, :10], bins[10:, :10], bins[:10, 10:], bins[10:, 10:]
+    mag_cells = mag[:10, :10], mag[10:, :10], mag[:10, 10:], mag[10:, 10:]
+    hists = [np.bincount(b.ravel(), m.ravel(), bin_n) for b, m in zip(bin_cells, mag_cells)]
+    hist = np.hstack(hists) # hist is a 64 bits
+    return hist;
+
+
+def ocr_svm_test():
+    img = cv2.imread('digits.png', 0)
+    cells = [np.hsplit(row, 100) for row in np.vsplit(img, 50)] # separate each ele into individual cell
+
+    # first half is training data, remaining is test data
+    train_cells = [i[:50] for i in cells]
+    test_cells = [i[50:] for i in cells]
+
+    ##########  Now Training  ###########
+    deskewed = [map(deskew, row) for row in train_cells]
+    hogdata = [map(hog, row) for row in deskewed]
+    trainData = np.float32(hogdata).reshape(-1, 64);
+    # response = np.float32(np.repeat(np.arange(10), 250)[:, np.newaxis])
+    response = np.int32(np.repeat(np.arange(10), 250)[:, np.newaxis]);
+
+    svm = cv2.ml.SVM_create();
+    svm.setKernel(cv2.ml.SVM_LINEAR);
+    svm.setType(cv2.ml.SVM_C_SVC);
+    svm.setC(2.67);
+    svm.setGamma(5.383);
+
+    svm.train(trainData, cv2.ml.ROW_SAMPLE, response); # this function take 'response' as integer
+    svm.save('svm_data.dat');
+
+    ##########   Now testing   ##############
+    deskewed = [map(deskew, row) for row in test_cells]
+    hogdata = [map(hog, row) for row in deskewed]
+    testData = np.float32(hogdata).reshape(-1, bin_n * 4);
+    result = svm.predict(testData) # result has two element, the second ele is prediction array
+
+    ##########    Check Accuracy   ############
+    mask = result[1] == response
+    correct = np.count_nonzero(mask)
+    print correct * 100.0 / len(result[1])
+
+
 def main():
     # knn_test();
     # ocr_knn_test();
-    orc_knn_alphabet();
-
+    # orc_knn_alphabet();
+    ocr_svm_test();
 
 main();
